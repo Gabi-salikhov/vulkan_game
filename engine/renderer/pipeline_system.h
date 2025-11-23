@@ -124,6 +124,15 @@ struct VertexInputBindingDescription {
     uint32_t binding;
     uint32_t stride;
     VkVertexInputRate inputRate;
+    
+    // Conversion operator to VkVertexInputBindingDescription
+    operator VkVertexInputBindingDescription() const {
+        VkVertexInputBindingDescription desc{};
+        desc.binding = binding;
+        desc.stride = stride;
+        desc.inputRate = inputRate;
+        return desc;
+    }
 };
 
 struct VertexInputAttributeDescription {
@@ -131,6 +140,16 @@ struct VertexInputAttributeDescription {
     uint32_t binding;
     VkFormat format;
     uint32_t offset;
+    
+    // Conversion operator to VkVertexInputAttributeDescription
+    operator VkVertexInputAttributeDescription() const {
+        VkVertexInputAttributeDescription desc{};
+        desc.location = location;
+        desc.binding = binding;
+        desc.format = format;
+        desc.offset = offset;
+        return desc;
+    }
 };
 
 // Common pipeline configurations

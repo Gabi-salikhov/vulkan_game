@@ -16,6 +16,9 @@ BufferAllocator::~BufferAllocator() {
 }
 
 bool BufferAllocator::initialize(VkDevice device, VkPhysicalDevice physicalDevice, void* memoryManager) {
+    m_device = device;
+    m_physicalDevice = physicalDevice;
+    m_memoryManager = static_cast<MemoryManager*>(memoryManager);
     if (m_initialized) {
         std::cout << "Buffer allocator is already initialized" << std::endl;
         return true;
@@ -24,7 +27,7 @@ bool BufferAllocator::initialize(VkDevice device, VkPhysicalDevice physicalDevic
     try {
         m_device = device;
         m_physicalDevice = physicalDevice;
-        m_memoryManager = memoryManager;
+        m_memoryManager = static_cast<MemoryManager*>(memoryManager);
 
         // Calculate alignment requirements for different buffer types
         VkPhysicalDeviceProperties properties;

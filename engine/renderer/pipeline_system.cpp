@@ -63,6 +63,7 @@ void PipelineSystem::shutdown() {
 
 VkPipeline PipelineSystem::createGraphicsPipeline(const VkGraphicsPipelineCreateInfo& createInfo) {
     if (!m_initialized) {
+        std::cerr << "Pipeline system not initialized" << std::endl;
         return VK_NULL_HANDLE;
     }
 
@@ -71,15 +72,74 @@ VkPipeline PipelineSystem::createGraphicsPipeline(const VkGraphicsPipelineCreate
         return VK_NULL_HANDLE;
     }
 
+    std::cout << "Creating graphics pipeline..." << std::endl;
+    std::cout << "Device: " << m_device << std::endl;
+    std::cout << "Cache: " << (m_pipelineCacheEnabled ? m_pipelineCache : VK_NULL_HANDLE) << std::endl;
+
     // Use pipeline cache if available
     VkPipelineCache cache = m_pipelineCacheEnabled ? m_pipelineCache : VK_NULL_HANDLE;
 
     VkPipeline pipeline;
+    std::cout << "Calling vkCreateGraphicsPipelines with device: " << m_device << std::endl;
+    std::cout << "Cache: " << cache << std::endl;
+    std::cout << "Create info pointer: " << &createInfo << std::endl;
+    
+    // Validate shader modules
+    for (uint32_t i = 0; i < createInfo.stageCount; i++) {
+        std::cout << "Shader stage " << i << ": module=" << createInfo.pStages[i].module
+                  << ", stage=" << createInfo.pStages[i].stage
+                  << ", name=" << createInfo.pStages[i].pName << std::endl;
+    }
+    
     VkResult result = vkCreateGraphicsPipelines(m_device, cache, 1, &createInfo, nullptr, &pipeline);
+    std::cout << "vkCreateGraphicsPipelines result: " << result << std::endl;
+    
     if (result != VK_SUCCESS) {
         std::cerr << "Failed to create graphics pipeline: " << result << std::endl;
+        
+        // Print more detailed error information
+        std::cerr << "Error details:" << std::endl;
+        std::cerr << "  Device: " << m_device << std::endl;
+        std::cerr << "  Cache: " << cache << std::endl;
+        std::cerr << "  Stage count: " << createInfo.stageCount << std::endl;
+        std::cerr << "  Layout: " << createInfo.layout << std::endl;
+        std::cerr << "  Render pass: " << createInfo.renderPass << std::endl;
+        
+        // Check if we can get more error info
+        if (result == VK_ERROR_OUT_OF_HOST_MEMORY) {
+            std::cerr << "  Error: VK_ERROR_OUT_OF_HOST_MEMORY" << std::endl;
+        } else if (result == VK_ERROR_OUT_OF_DEVICE_MEMORY) {
+            std::cerr << "  Error: VK_ERROR_OUT_OF_DEVICE_MEMORY" << std::endl;
+        } else if (result == VK_ERROR_INITIALIZATION_FAILED) {
+            std::cerr << "  Error: VK_ERROR_INITIALIZATION_FAILED" << std::endl;
+        } else if (result == VK_ERROR_DEVICE_LOST) {
+            std::cerr << "  Error: VK_ERROR_DEVICE_LOST" << std::endl;
+        } else if (result == VK_ERROR_EXTENSION_NOT_PRESENT) {
+            std::cerr << "  Error: VK_ERROR_EXTENSION_NOT_PRESENT" << std::endl;
+        } else if (result == VK_ERROR_FEATURE_NOT_PRESENT) {
+            std::cerr << "  Error: VK_ERROR_FEATURE_NOT_PRESENT" << std::endl;
+        } else if (result == VK_ERROR_INCOMPATIBLE_DRIVER) {
+            std::cerr << "  Error: VK_ERROR_INCOMPATIBLE_DRIVER" << std::endl;
+        } else if (result == VK_ERROR_LAYER_NOT_PRESENT) {
+            std::cerr << "  Error: VK_ERROR_LAYER_NOT_PRESENT" << std::endl;
+        } else if (result == VK_ERROR_FRAGMENTATION) {
+            std::cerr << "  Error: VK_ERROR_FRAGMENTATION" << std::endl;
+        } else if (result == VK_ERROR_INVALID_SHADER_NV) {
+            std::cerr << "  Error: VK_ERROR_INVALID_SHADER_NV" << std::endl;
+        } else if (result == VK_ERROR_OUT_OF_POOL_MEMORY) {
+            std::cerr << "  Error: VK_ERROR_OUT_OF_POOL_MEMORY" << std::endl;
+        } else if (result == VK_ERROR_INVALID_EXTERNAL_HANDLE) {
+            std::cerr << "  Error: VK_ERROR_INVALID_EXTERNAL_HANDLE" << std::endl;
+        } else if (result == VK_ERROR_FRAGMENTATION_EXT) {
+            std::cerr << "  Error: VK_ERROR_FRAGMENTATION_EXT" << std::endl;
+        } else if (result == VK_ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS) {
+            std::cerr << "  Error: VK_ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS" << std::endl;
+        }
+        
         return VK_NULL_HANDLE;
     }
+
+    std::cout << "Pipeline created successfully, handle: " << pipeline << std::endl;
 
     // Store pipeline with generated name
     std::string name = generatePipelineName(createInfo);
@@ -294,23 +354,51 @@ void PipelineSystem::destroyAllPipelineStates() {
 
 VkPipeline PipelineSystem::createPipelineFromConfig(const PipelineConfig& config) {
     if (!m_initialized) {
+        std::cerr << "Pipeline system not initialized" << std::endl;
         return VK_NULL_HANDLE;
     }
 
-    // Vertex input state
+    std::cout << "Creating pipeline from config..." << std::endl;
+    std::cout << "Vertex shader: " << config.vertexShader << std::endl;
+    std::cout << "Fragment shader: " << config.fragmentShader << std::endl;
+    std::cout << "Layout: " << config.layout << std::endl;
+    std::cout << "Render pass: " << config.renderPass << std::endl;
+
+    // Create a minimal pipeline configuration
+    VkGraphicsPipelineCreateInfo pipelineInfo{};
+    pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+    
+    // Shader stages
+    VkPipelineShaderStageCreateInfo vertexShaderStage{};
+    vertexShaderStage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    vertexShaderStage.stage = VK_SHADER_STAGE_VERTEX_BIT;
+    vertexShaderStage.module = config.vertexShader;
+    vertexShaderStage.pName = "main";
+    
+    VkPipelineShaderStageCreateInfo fragmentShaderStage{};
+    fragmentShaderStage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    fragmentShaderStage.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+    fragmentShaderStage.module = config.fragmentShader;
+    fragmentShaderStage.pName = "main";
+    
+    VkPipelineShaderStageCreateInfo shaderStages[] = {vertexShaderStage, fragmentShaderStage};
+    pipelineInfo.stageCount = 2;
+    pipelineInfo.pStages = shaderStages;
+    
+    // Vertex input state - empty for now
     VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
     vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-    vertexInputInfo.vertexBindingDescriptionCount = static_cast<uint32_t>(config.vertexBindings.size());
-    vertexInputInfo.pVertexBindingDescriptions = config.vertexBindings.data();
-    vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(config.vertexAttributes.size());
-    vertexInputInfo.pVertexAttributeDescriptions = config.vertexAttributes.data();
-
+    vertexInputInfo.vertexBindingDescriptionCount = 0;
+    vertexInputInfo.vertexAttributeDescriptionCount = 0;
+    pipelineInfo.pVertexInputState = &vertexInputInfo;
+    
     // Input assembly state
     VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
     inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-    inputAssembly.topology = config.topology;
+    inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
     inputAssembly.primitiveRestartEnable = VK_FALSE;
-
+    pipelineInfo.pInputAssemblyState = &inputAssembly;
+    
     // Viewport state
     VkPipelineViewportStateCreateInfo viewportState{};
     viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
@@ -318,88 +406,67 @@ VkPipeline PipelineSystem::createPipelineFromConfig(const PipelineConfig& config
     viewportState.scissorCount = 1;
     viewportState.pViewports = nullptr; // Will be set dynamically
     viewportState.pScissors = nullptr; // Will be set dynamically
-
+    pipelineInfo.pViewportState = &viewportState;
+    
     // Rasterization state
     VkPipelineRasterizationStateCreateInfo rasterizer{};
     rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
     rasterizer.depthClampEnable = VK_FALSE;
     rasterizer.rasterizerDiscardEnable = VK_FALSE;
-    rasterizer.polygonMode = config.polygonMode;
-    rasterizer.lineWidth = config.lineWidth;
-    rasterizer.cullMode = config.cullMode;
-    rasterizer.frontFace = config.frontFace;
+    rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
+    rasterizer.lineWidth = 1.0f;
+    rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
+    rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
     rasterizer.depthBiasEnable = VK_FALSE;
-
+    pipelineInfo.pRasterizationState = &rasterizer;
+    
     // Multisampling state
     VkPipelineMultisampleStateCreateInfo multisampling{};
     multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
     multisampling.sampleShadingEnable = VK_FALSE;
     multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
-
-    // Depth stencil state
+    pipelineInfo.pMultisampleState = &multisampling;
+    
+    // Depth stencil state - disabled
     VkPipelineDepthStencilStateCreateInfo depthStencil{};
     depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-    depthStencil.depthTestEnable = config.depthTest;
-    depthStencil.depthWriteEnable = config.depthWrite;
-    depthStencil.depthCompareOp = config.depthCompareOp;
+    depthStencil.depthTestEnable = VK_FALSE;
+    depthStencil.depthWriteEnable = VK_FALSE;
+    depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
     depthStencil.depthBoundsTestEnable = VK_FALSE;
     depthStencil.stencilTestEnable = VK_FALSE;
-
+    pipelineInfo.pDepthStencilState = &depthStencil;
+    
     // Color blending state
     VkPipelineColorBlendAttachmentState colorBlendAttachment{};
-    colorBlendAttachment.colorWriteMask = config.colorWriteMask;
-    colorBlendAttachment.blendEnable = config.blendEnable;
-
+    colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+    colorBlendAttachment.blendEnable = VK_FALSE;
+    
     VkPipelineColorBlendStateCreateInfo colorBlending{};
     colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
     colorBlending.logicOpEnable = VK_FALSE;
     colorBlending.attachmentCount = 1;
     colorBlending.pAttachments = &colorBlendAttachment;
-
+    pipelineInfo.pColorBlendState = &colorBlending;
+    
     // Dynamic state
-    std::vector<VkDynamicState> dynamicStates = {
-        VK_DYNAMIC_STATE_VIEWPORT,
-        VK_DYNAMIC_STATE_SCISSOR
-    };
-
     VkPipelineDynamicStateCreateInfo dynamicState{};
     dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-    dynamicState.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size());
-    dynamicState.pDynamicStates = dynamicStates.data();
-
-    // Shader stages (placeholder - would need actual shader modules)
-    VkPipelineShaderStageCreateInfo vertexShaderStage{};
-    vertexShaderStage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    vertexShaderStage.stage = VK_SHADER_STAGE_VERTEX_BIT;
-    vertexShaderStage.module = config.vertexShader;
-    vertexShaderStage.pName = "main";
-
-    VkPipelineShaderStageCreateInfo fragmentShaderStage{};
-    fragmentShaderStage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    fragmentShaderStage.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-    fragmentShaderStage.module = config.fragmentShader;
-    fragmentShaderStage.pName = "main";
-
-    std::vector<VkPipelineShaderStageCreateInfo> shaderStages = {vertexShaderStage, fragmentShaderStage};
-
-    // Graphics pipeline create info
-    VkGraphicsPipelineCreateInfo pipelineInfo{};
-    pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-    pipelineInfo.stageCount = static_cast<uint32_t>(shaderStages.size());
-    pipelineInfo.pStages = shaderStages.data();
-    pipelineInfo.pVertexInputState = &vertexInputInfo;
-    pipelineInfo.pInputAssemblyState = &inputAssembly;
-    pipelineInfo.pViewportState = &viewportState;
-    pipelineInfo.pRasterizationState = &rasterizer;
-    pipelineInfo.pMultisampleState = &multisampling;
-    pipelineInfo.pDepthStencilState = &depthStencil;
-    pipelineInfo.pColorBlendState = &colorBlending;
+    VkDynamicState dynamicStates[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
+    dynamicState.dynamicStateCount = 2;
+    dynamicState.pDynamicStates = dynamicStates;
     pipelineInfo.pDynamicState = &dynamicState;
+    
+    // Pipeline layout and render pass
     pipelineInfo.layout = config.layout;
     pipelineInfo.renderPass = config.renderPass;
-    pipelineInfo.subpass = config.subpass;
+    pipelineInfo.subpass = 0;
+    
+    std::cout << "Pipeline info created, calling createGraphicsPipeline..." << std::endl;
 
-    return createGraphicsPipeline(pipelineInfo);
+    VkPipeline result = createGraphicsPipeline(pipelineInfo);
+    std::cout << "Pipeline creation result: " << result << std::endl;
+    return result;
 }
 
 VkPipelineLayout PipelineSystem::createPipelineLayoutFromConfig(const std::vector<VkDescriptorSetLayout>& descriptorSetLayouts, const std::vector<VkPushConstantRange>& pushConstants) {
@@ -484,22 +551,33 @@ std::string PipelineSystem::generatePipelineName(const VkGraphicsPipelineCreateI
 }
 
 bool PipelineSystem::validatePipelineCreateInfo(const VkGraphicsPipelineCreateInfo& createInfo) const {
+    std::cout << "Validating pipeline create info..." << std::endl;
+    std::cout << "sType: " << createInfo.sType << std::endl;
+    std::cout << "stageCount: " << createInfo.stageCount << std::endl;
+    std::cout << "layout: " << createInfo.layout << std::endl;
+    std::cout << "renderPass: " << createInfo.renderPass << std::endl;
+    
     if (createInfo.sType != VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO) {
+        std::cerr << "Invalid sType: " << createInfo.sType << std::endl;
         return false;
     }
     
     if (createInfo.stageCount == 0) {
+        std::cerr << "No shader stages" << std::endl;
         return false;
     }
     
     if (createInfo.layout == VK_NULL_HANDLE) {
+        std::cerr << "Null layout" << std::endl;
         return false;
     }
     
     if (createInfo.renderPass == VK_NULL_HANDLE) {
+        std::cerr << "Null render pass" << std::endl;
         return false;
     }
     
+    std::cout << "Pipeline create info is valid" << std::endl;
     return true;
 }
 

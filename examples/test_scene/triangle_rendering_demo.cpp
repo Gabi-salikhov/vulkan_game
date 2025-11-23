@@ -1,4 +1,5 @@
-#include <GLFW/glfw3.h>
+#include <SDL2/SDL.h>
+#include <SDL2/SDL_vulkan.h>
 #include <vulkan/vulkan.h>
 
 #include <chrono>
@@ -32,7 +33,7 @@ const std::vector<uint32_t> indices = {0, 1, 2};
 
 class TriangleRenderer {
    public:
-    TriangleRenderer(GLFWwindow* window);
+    TriangleRenderer(SDL_Window* window);
     ~TriangleRenderer();
 
     bool initialize();
@@ -52,7 +53,7 @@ class TriangleRenderer {
     void updateUniformBuffer(uint32_t currentImage);
 
     // Vulkan objects
-    GLFWwindow* m_window;
+    SDL_Window* m_window;
     std::unique_ptr<VortexEngine::VulkanContext> m_vulkanContext;
     std::unique_ptr<VortexEngine::Window> m_windowSystem;
     std::unique_ptr<VortexEngine::BufferAllocator> m_bufferAllocator;
@@ -86,7 +87,7 @@ class TriangleRenderer {
     float m_time = 0.0f;
 };
 
-TriangleRenderer::TriangleRenderer(GLFWwindow* window)
+TriangleRenderer::TriangleRenderer(SDL_Window* window)
     : m_window(window),
       m_vulkanContext(nullptr),
       m_windowSystem(nullptr),
@@ -112,6 +113,13 @@ bool TriangleRenderer::initialize() {
     try {
         std::cout << "Initializing Triangle Renderer..." << std::endl;
 
+        // Initialize window system
+        m_windowSystem = std::make_unique<VortexEngine::Window>();
+        if (!m_windowSystem->initialize("Triangle Renderer", 800, 600)) {
+            std::cerr << "Failed to initialize window system" << std::endl;
+            return false;
+        }
+
         // Initialize Vulkan context
         m_vulkanContext = std::make_unique<VortexEngine::VulkanContext>();
 
@@ -131,9 +139,19 @@ bool TriangleRenderer::initialize() {
             std::cerr << "Failed to initialize Vulkan context" << std::endl;
             return false;
         }
+        
+        // Create a surface for the window using our Window class
+        VkSurfaceKHR surface;
+        if (!m_windowSystem->createVulkanSurface(m_vulkanContext->getInstance(), &surface)) {
+            std::cerr << "Failed to create window surface" << std::endl;
+            return false;
+        }
+        
+        // Store the surface in the Vulkan context
+        m_vulkanContext->setSurface(surface);
 
         // Create swapchain
-        if (!m_vulkanContext->createSwapChain(m_window)) {
+        if (!m_vulkanContext->createSwapChain(surface)) {
             std::cerr << "Failed to create swap chain" << std::endl;
             return false;
         }
@@ -145,15 +163,17 @@ bool TriangleRenderer::initialize() {
 
         std::cout << "Swapchain created with " << m_swapchainImageCount << " images" << std::endl;
 
-        // Initialize subsystems
+        // Initialize subsystems (without pipeline system yet)
         m_bufferAllocator = std::make_unique<VortexEngine::BufferAllocator>();
         m_bufferAllocator->initialize(m_vulkanContext->getDevice(), m_vulkanContext->getPhysicalDevice(), nullptr);
         
         m_shaderSystem = std::make_unique<VortexEngine::ShaderSystem>();
         m_shaderSystem->initialize(m_vulkanContext->getDevice());
         
-        m_pipelineSystem = std::make_unique<VortexEngine::PipelineSystem>();
-        m_pipelineSystem->initialize(m_vulkanContext->getDevice(), m_renderPass);
+        // Create command pool
+        if (!createCommandPool()) {
+            return false;
+        }
         
         m_commandBufferManager = std::make_unique<VortexEngine::CommandBufferManager>(
             m_vulkanContext->getDevice(), m_commandPool);
@@ -161,23 +181,35 @@ bool TriangleRenderer::initialize() {
         m_syncObjects = std::make_unique<VortexEngine::SyncObjects>(m_vulkanContext->getDevice(),
                                                                     m_swapchainImageCount);
 
-        // Create command pool
-        if (!createCommandPool()) {
-            return false;
-        }
-
         // Load shaders
-        if (!m_shaderSystem->loadShader("triangle", "shaders/common/common.vert", "shaders/common/common.frag")) {
+        if (!m_shaderSystem->loadShader("triangle", "shaders/common/common.vert.spv", "shaders/common/common.frag.spv")) {
             std::cerr << "Failed to load shaders" << std::endl;
             return false;
         }
+        
+        // Verify shaders were loaded successfully
+        VkShaderModule vertexShader = m_shaderSystem->getVertexShader("triangle");
+        VkShaderModule fragmentShader = m_shaderSystem->getFragmentShader("triangle");
+        
+        if (vertexShader == VK_NULL_HANDLE || fragmentShader == VK_NULL_HANDLE) {
+            std::cerr << "Shader modules are invalid after loading!" << std::endl;
+            std::cerr << "Vertex shader: " << vertexShader << std::endl;
+            std::cerr << "Fragment shader: " << fragmentShader << std::endl;
+            return false;
+        }
+        
+        std::cout << "Shaders loaded successfully" << std::endl;
 
         // Create render pass
         if (!createRenderPass()) {
             return false;
         }
+        
+        // Skip pipeline system for now and create pipeline directly
+        // m_pipelineSystem = std::make_unique<VortexEngine::PipelineSystem>();
+        // m_pipelineSystem->initialize(m_vulkanContext->getDevice(), m_renderPass);
 
-        // Create pipeline
+        // Create pipeline using direct Vulkan API
         if (!createPipeline()) {
             return false;
         }
@@ -422,44 +454,160 @@ bool TriangleRenderer::createFramebuffers() {
 }
 
 bool TriangleRenderer::createPipeline() {
+    std::cout << "Starting pipeline creation..." << std::endl;
+    
     // Create pipeline layout
     VkPipelineLayoutCreateInfo layoutInfo{};
     layoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     layoutInfo.setLayoutCount = 0;
     layoutInfo.pushConstantRangeCount = 0;
 
+    std::cout << "Creating pipeline layout..." << std::endl;
     VkResult result = vkCreatePipelineLayout(m_vulkanContext->getDevice(), &layoutInfo, nullptr,
                                              &m_pipelineLayout);
     if (result != VK_SUCCESS) {
         std::cerr << "Failed to create pipeline layout: " << result << std::endl;
         return false;
     }
+    std::cout << "Pipeline layout created successfully" << std::endl;
 
-    // Create pipeline using PipelineSystem
-    // Create pipeline configuration
-    VortexEngine::PipelineSystem::PipelineConfig config;
-    config.vertexShader = m_shaderSystem->getVertexShader("triangle");
-    config.fragmentShader = m_shaderSystem->getFragmentShader("triangle");
-    config.layout = m_pipelineLayout;
-    config.renderPass = m_renderPass;
-    config.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-    config.depthTest = false; // No depth buffer for simple triangle
+    // Get shader modules
+    std::cout << "Getting shader modules..." << std::endl;
+    VkShaderModule vertexShader = m_shaderSystem->getVertexShader("triangle");
+    VkShaderModule fragmentShader = m_shaderSystem->getFragmentShader("triangle");
     
-    // Set up vertex input
-    config.vertexBindings.resize(1);
-    config.vertexBindings[0] = {0, sizeof(Vertex), VK_VERTEX_INPUT_RATE_VERTEX};
+    std::cout << "Vertex shader: " << vertexShader << std::endl;
+    std::cout << "Fragment shader: " << fragmentShader << std::endl;
     
-    config.vertexAttributes.resize(2);
-    config.vertexAttributes[0] = {0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, pos)};
-    config.vertexAttributes[1] = {1, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, color)};
-    
-    m_pipeline = m_pipelineSystem->createPipelineFromConfig(config);
-    if (m_pipeline == VK_NULL_HANDLE) {
-        std::cerr << "Failed to create graphics pipeline" << std::endl;
+    if (vertexShader == VK_NULL_HANDLE || fragmentShader == VK_NULL_HANDLE) {
+        std::cerr << "Error: Invalid shader modules!" << std::endl;
         return false;
     }
 
-    std::cout << "Graphics pipeline created successfully" << std::endl;
+    // Create shader stages
+    std::cout << "Creating shader stages..." << std::endl;
+    VkPipelineShaderStageCreateInfo vertexShaderStage{};
+    vertexShaderStage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    vertexShaderStage.stage = VK_SHADER_STAGE_VERTEX_BIT;
+    vertexShaderStage.module = vertexShader;
+    vertexShaderStage.pName = "main";
+
+    VkPipelineShaderStageCreateInfo fragmentShaderStage{};
+    fragmentShaderStage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    fragmentShaderStage.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+    fragmentShaderStage.module = fragmentShader;
+    fragmentShaderStage.pName = "main";
+
+    VkPipelineShaderStageCreateInfo shaderStages[] = {vertexShaderStage, fragmentShaderStage};
+
+    // Vertex input state - empty for now
+    VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
+    vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+    vertexInputInfo.vertexBindingDescriptionCount = 0;
+    vertexInputInfo.vertexAttributeDescriptionCount = 0;
+
+    // Input assembly state
+    VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
+    inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+    inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    inputAssembly.primitiveRestartEnable = VK_FALSE;
+
+    // Viewport state
+    VkPipelineViewportStateCreateInfo viewportState{};
+    viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+    viewportState.viewportCount = 1;
+    viewportState.scissorCount = 1;
+    viewportState.pViewports = nullptr; // Will be set dynamically
+    viewportState.pScissors = nullptr; // Will be set dynamically
+
+    // Rasterization state
+    VkPipelineRasterizationStateCreateInfo rasterizer{};
+    rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+    rasterizer.depthClampEnable = VK_FALSE;
+    rasterizer.rasterizerDiscardEnable = VK_FALSE;
+    rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
+    rasterizer.lineWidth = 1.0f;
+    rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
+    rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
+    rasterizer.depthBiasEnable = VK_FALSE;
+
+    // Multisampling state
+    VkPipelineMultisampleStateCreateInfo multisampling{};
+    multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+    multisampling.sampleShadingEnable = VK_FALSE;
+    multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+
+    // Depth stencil state - disabled
+    VkPipelineDepthStencilStateCreateInfo depthStencil{};
+    depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+    depthStencil.depthTestEnable = VK_FALSE;
+    depthStencil.depthWriteEnable = VK_FALSE;
+    depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
+    depthStencil.depthBoundsTestEnable = VK_FALSE;
+    depthStencil.stencilTestEnable = VK_FALSE;
+
+    // Color blending state
+    VkPipelineColorBlendAttachmentState colorBlendAttachment{};
+    colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+                                         VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+    colorBlendAttachment.blendEnable = VK_FALSE;
+
+    VkPipelineColorBlendStateCreateInfo colorBlending{};
+    colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+    colorBlending.logicOpEnable = VK_FALSE;
+    colorBlending.attachmentCount = 1;
+    colorBlending.pAttachments = &colorBlendAttachment;
+
+    // Dynamic state
+    VkPipelineDynamicStateCreateInfo dynamicState{};
+    dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+    VkDynamicState dynamicStates[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
+    dynamicState.dynamicStateCount = 2;
+    dynamicState.pDynamicStates = dynamicStates;
+
+    // Graphics pipeline create info
+    VkGraphicsPipelineCreateInfo pipelineInfo{};
+    pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+    pipelineInfo.stageCount = 2;
+    pipelineInfo.pStages = shaderStages;
+    pipelineInfo.pVertexInputState = &vertexInputInfo;
+    pipelineInfo.pInputAssemblyState = &inputAssembly;
+    pipelineInfo.pViewportState = &viewportState;
+    pipelineInfo.pRasterizationState = &rasterizer;
+    pipelineInfo.pMultisampleState = &multisampling;
+    pipelineInfo.pDepthStencilState = &depthStencil;
+    pipelineInfo.pColorBlendState = &colorBlending;
+    pipelineInfo.pDynamicState = &dynamicState;
+    pipelineInfo.layout = m_pipelineLayout;
+    pipelineInfo.renderPass = m_renderPass;
+    pipelineInfo.subpass = 0;
+
+    // Create pipeline
+    std::cout << "Creating pipeline directly with Vulkan API..." << std::endl;
+    std::cout << "Device: " << m_vulkanContext->getDevice() << std::endl;
+    std::cout << "Render pass: " << m_renderPass << std::endl;
+    std::cout << "Pipeline layout: " << m_pipelineLayout << std::endl;
+    
+    // Try to create the pipeline with error checking
+    std::cout << "Calling vkCreateGraphicsPipelines..." << std::endl;
+    
+    // First, let's try to validate the pipeline info
+    std::cout << "Validating pipeline create info..." << std::endl;
+    std::cout << "sType: " << pipelineInfo.sType << std::endl;
+    std::cout << "stageCount: " << pipelineInfo.stageCount << std::endl;
+    std::cout << "layout: " << pipelineInfo.layout << std::endl;
+    std::cout << "renderPass: " << pipelineInfo.renderPass << std::endl;
+    
+    // Try to create the pipeline
+    result = vkCreateGraphicsPipelines(m_vulkanContext->getDevice(), VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_pipeline);
+    std::cout << "vkCreateGraphicsPipelines returned" << std::endl;
+    
+    if (result != VK_SUCCESS) {
+        std::cerr << "Failed to create pipeline: " << result << std::endl;
+        return false;
+    }
+    
+    std::cout << "Pipeline created successfully with handle: " << m_pipeline << std::endl;
     return true;
 }
 
@@ -694,43 +842,37 @@ void TriangleRenderer::updateUniformBuffer(uint32_t currentImage) {
 }
 
 int main() {
-    // Initialize GLFW
-    if (!glfwInit()) {
-        std::cerr << "Failed to initialize GLFW" << std::endl;
-        return -1;
-    }
-
-    // Create window
-    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-
-    GLFWwindow* window =
-        glfwCreateWindow(800, 600, "Vortex Engine - Triangle Demo", nullptr, nullptr);
-    if (!window) {
-        std::cerr << "Failed to create GLFW window" << std::endl;
-        glfwTerminate();
+    // Create window system
+    VortexEngine::Window windowSystem;
+    if (!windowSystem.initialize("Vortex Engine - Triangle Demo", 800, 600)) {
+        std::cerr << "Failed to initialize window system" << std::endl;
         return -1;
     }
 
     // Create renderer
-    TriangleRenderer renderer(window);
+    TriangleRenderer renderer(windowSystem.getSDLWindow());
     if (!renderer.initialize()) {
         std::cerr << "Failed to initialize renderer" << std::endl;
-        glfwDestroyWindow(window);
-        glfwTerminate();
         return -1;
     }
 
     // Main loop
-    while (!glfwWindowShouldClose(window)) {
-        glfwPollEvents();
+    bool running = true;
+    SDL_Event event;
+    
+    while (running) {
+        while (SDL_PollEvent(&event)) {
+            if (event.type == SDL_QUIT) {
+                running = false;
+            }
+        }
+        
         renderer.render();
     }
 
     // Cleanup
     renderer.cleanup();
-    glfwDestroyWindow(window);
-    glfwTerminate();
+    windowSystem.shutdown();
 
     return 0;
 }

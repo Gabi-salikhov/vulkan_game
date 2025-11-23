@@ -35,6 +35,9 @@ target_include_directories(vortex_core PUBLIC
 # Vulkan dependencies
 target_link_libraries(vortex_core PUBLIC Vulkan::Vulkan)
 
+# SDL2 dependencies
+target_link_libraries(vortex_core PUBLIC SDL2::SDL2)
+
 # Python dependencies - commented out for now
 # target_link_libraries(vortex_core PUBLIC Python3::Python)
 

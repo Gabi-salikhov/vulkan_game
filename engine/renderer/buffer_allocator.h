@@ -8,6 +8,8 @@
 
 namespace VortexEngine {
 
+class MemoryManager;
+
 class BufferAllocator {
 public:
     BufferAllocator();
@@ -107,7 +109,7 @@ private:
     // Vulkan objects
     VkDevice m_device = VK_NULL_HANDLE;
     VkPhysicalDevice m_physicalDevice = VK_NULL_HANDLE;
-    void* m_memoryManager = nullptr;
+    MemoryManager* m_memoryManager = nullptr;
 
     // Buffer storage
     std::vector<BufferAllocation> m_allocations;

@@ -1,6 +1,7 @@
 #include "command_buffer.h"
 #include <iostream>
 #include <stdexcept>
+#include <algorithm>
 
 namespace VortexEngine {
 

@@ -1,5 +1,5 @@
-#define GLFW_INCLUDE_VULKAN
-#include <GLFW/glfw3.h>
+#include <SDL2/SDL.h>
+#include <SDL2/SDL_vulkan.h>
 #include <iostream>
 #include <chrono>
 #include <cmath>
@@ -26,20 +26,25 @@ public:
     }
 
     bool initialize() {
-        // Initialize GLFW
-        if (!glfwInit()) {
-            std::cerr << "Failed to initialize GLFW" << std::endl;
+        // Initialize SDL
+        if (SDL_Init(SDL_INIT_VIDEO) < 0) {
+            std::cerr << "Failed to initialize SDL: " << SDL_GetError() << std::endl;
             return false;
         }
 
         // Create window
-        glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-        glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+        window = SDL_CreateWindow(
+            "Vortex Engine - Test Scene",
+            SDL_WINDOWPOS_CENTERED,
+            SDL_WINDOWPOS_CENTERED,
+            800,
+            600,
+            SDL_WINDOW_VULKAN | SDL_WINDOW_SHOWN
+        );
         
-        window = glfwCreateWindow(800, 600, "Vortex Engine - Test Scene", nullptr, nullptr);
         if (!window) {
-            std::cerr << "Failed to create GLFW window" << std::endl;
-            glfwTerminate();
+            std::cerr << "Failed to create SDL window: " << SDL_GetError() << std::endl;
+            SDL_Quit();
             return false;
         }
 
@@ -78,8 +83,14 @@ public:
         
         auto startTime = std::chrono::high_resolution_clock::now();
         
-        while (!glfwWindowShouldClose(window)) {
-            glfwPollEvents();
+        bool running = true;
+        SDL_Event event;
+        while (running) {
+            while (SDL_PollEvent(&event)) {
+                if (event.type == SDL_QUIT) {
+                    running = false;
+                }
+            }
             
             // Simple animation - change window title with time
             auto currentTime = std::chrono::high_resolution_clock::now();
@@ -93,7 +104,7 @@ public:
             // Update window title to show the "color"
             char title[256];
             snprintf(title, sizeof(title), "Vortex Engine - RGB(%.2f, %.2f, %.2f)", r, g, b);
-            glfwSetWindowTitle(window, title);
+            SDL_SetWindowTitle(window, title);
             
             // Print color info every second
             if ((int)time != (int)(time - 0.016)) { // Roughly every second
@@ -106,7 +117,7 @@ public:
     }
 
 private:
-    GLFWwindow* window;
+    SDL_Window* window;
     VkInstance vulkanInstance;
     VkPhysicalDevice vulkanPhysicalDevice;
     VkDevice vulkanDevice;
@@ -128,12 +139,14 @@ private:
         createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
         createInfo.pApplicationInfo = &appInfo;
 
-        uint32_t glfwExtensionCount = 0;
-        const char** glfwExtensions;
-        glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
+        uint32_t extensionCount = 0;
+        SDL_Vulkan_GetInstanceExtensions(window, &extensionCount, nullptr);
+        
+        std::vector<const char*> extensions(extensionCount);
+        SDL_Vulkan_GetInstanceExtensions(window, &extensionCount, extensions.data());
 
-        createInfo.enabledExtensionCount = glfwExtensionCount;
-        createInfo.ppEnabledExtensionNames = glfwExtensions;
+        createInfo.enabledExtensionCount = extensionCount;
+        createInfo.ppEnabledExtensionNames = extensions.data();
         createInfo.enabledLayerCount = 0;
 
         if (vkCreateInstance(&createInfo, nullptr, &vulkanInstance) != VK_SUCCESS) {
@@ -146,7 +159,7 @@ private:
     }
 
     bool createVulkanSurface() {
-        if (glfwCreateWindowSurface(vulkanInstance, window, nullptr, &vulkanSurface) != VK_SUCCESS) {
+        if (!SDL_Vulkan_CreateSurface(window, vulkanInstance, &vulkanSurface)) {
             std::cerr << "Failed to create window surface" << std::endl;
             return false;
         }
@@ -372,7 +385,7 @@ private:
             return capabilities.currentExtent;
         } else {
             int width, height;
-            glfwGetFramebufferSize(window, &width, &height);
+            SDL_GetWindowSize(window, &width, &height);
 
             VkExtent2D actualExtent = {
                 static_cast<uint32_t>(width),
@@ -404,10 +417,10 @@ private:
         }
 
         if (window) {
-            glfwDestroyWindow(window);
+            SDL_DestroyWindow(window);
         }
 
-        glfwTerminate();
+        SDL_Quit();
     }
 };
 

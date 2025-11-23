@@ -1,7 +1,6 @@
 #pragma once
 
 #include <vulkan/vulkan.h>
-#include <GLFW/glfw3.h>
 #include <memory>
 #include <vector>
 #include <string>
@@ -64,9 +63,10 @@ public:
     std::string getPhysicalDeviceName() const;
 
     // Swapchain management
-    bool createSwapChain(GLFWwindow* window);
-    void recreateSwapChain(GLFWwindow* window);
+    bool createSwapChain(VkSurfaceKHR surface);
+    void recreateSwapChain(VkSurfaceKHR surface);
     void cleanupSwapChain();
+    void setSurface(VkSurfaceKHR surface) { m_surface = surface; }
     
     // Swapchain accessors
     VkSwapchainKHR getSwapChain() const { return m_swapChain; }
@@ -88,6 +88,7 @@ private:
     VkDevice m_device = VK_NULL_HANDLE;
     VkQueue m_graphicsQueue = VK_NULL_HANDLE;
     VkQueue m_presentQueue = VK_NULL_HANDLE;
+    VkSurfaceKHR m_surface = VK_NULL_HANDLE;
 
     // Queue family indices
     uint32_t m_graphicsQueueFamilyIndex = UINT32_MAX;
@@ -105,7 +106,8 @@ private:
     // Extensions
     std::vector<const char*> m_instanceExtensions = {
         VK_KHR_SURFACE_EXTENSION_NAME,
-        VK_KHR_SWAPCHAIN_EXTENSION_NAME
+        VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+        VK_EXT_DEBUG_UTILS_EXTENSION_NAME
     };
 
     // Device features
@@ -143,7 +145,7 @@ private:
     VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats);
     VkPresentModeKHR chooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes);
     VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities);
-    void createSwapChainImages(GLFWwindow* window);
+    void createSwapChainImages(VkSurfaceKHR surface);
     void createSwapChainImageViews();
 };
 

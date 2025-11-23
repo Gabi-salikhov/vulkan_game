@@ -6,6 +6,13 @@
         "chrono": "cpp",
         "cstring": "cpp",
         "algorithm": "cpp",
-        "cmath": "cpp"
+        "cmath": "cpp",
+        "iostream": "cpp",
+        "stdexcept": "cpp",
+        "vector": "cpp",
+        "memory": "cpp",
+        "thread": "cpp",
+        "filesystem": "cpp",
+        "mutex": "cpp"
     }
 }

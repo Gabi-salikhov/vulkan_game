@@ -78,7 +78,7 @@ private:
     };
 
     std::unordered_map<std::string, ShaderData> m_shaders;
-    std::mutex m_shaderMutex;
+    mutable std::mutex m_shaderMutex;
 
     // Configuration
     bool m_initialized = false;

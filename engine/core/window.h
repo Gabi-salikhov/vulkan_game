@@ -1,6 +1,8 @@
 #pragma once
 
-#include <GLFW/glfw3.h>
+#include <SDL2/SDL.h>
+#include <SDL2/SDL_vulkan.h>
+#include <vulkan/vulkan.h>
 #include <string>
 #include <functional>
 #include <memory>
@@ -35,7 +37,7 @@ public:
     // Window properties
     int getWidth() const { return m_width; }
     int getHeight() const { return m_height; }
-    GLFWwindow* getGLFWWindow() const { return m_window; }
+    SDL_Window* getSDLWindow() const { return m_window; }
     bool isInitialized() const { return m_initialized; }
     bool isVSyncEnabled() const { return m_vsyncEnabled; }
 
@@ -53,15 +55,18 @@ public:
     void setCursorPos(double xpos, double ypos);
 
     // Cursor modes
-    void setCursorMode(int mode); // GLFW_CURSOR_NORMAL, GLFW_CURSOR_HIDDEN, GLFW_CURSOR_DISABLED
+    void setCursorMode(int mode); // SDL_CURSOR_NORMAL, SDL_CURSOR_HIDDEN, SDL_CURSOR_DISABLED
 
     // Window hints
     static void setHint(int hint, int value);
     static void setHints(const std::vector<std::pair<int, int>>& hints);
+    
+    // Vulkan surface creation
+    bool createVulkanSurface(VkInstance instance, VkSurfaceKHR* surface) const;
 
 private:
     // GLFW window
-    GLFWwindow* m_window = nullptr;
+    SDL_Window* m_window = nullptr;
     
     // Window state
     bool m_initialized = false;
@@ -78,11 +83,11 @@ private:
     ResizeCallback m_resizeCallback;
 
     // Static callback functions
-    static void keyCallbackStatic(GLFWwindow* window, int key, int scancode, int action, int mods);
-    static void mouseButtonCallbackStatic(GLFWwindow* window, int button, int action, int mods);
-    static void cursorPosCallbackStatic(GLFWwindow* window, double xpos, double ypos);
-    static void scrollCallbackStatic(GLFWwindow* window, double xoffset, double yoffset);
-    static void resizeCallbackStatic(GLFWwindow* window, int width, int height);
+    static void keyCallbackStatic(SDL_Event* event);
+    static void mouseButtonCallbackStatic(SDL_Event* event);
+    static void cursorPosCallbackStatic(SDL_Event* event);
+    static void scrollCallbackStatic(SDL_Event* event);
+    static void resizeCallbackStatic(SDL_Event* event);
 
     // Initialize GLFW
     bool initializeGLFW();

@@ -213,10 +213,6 @@ void SyncObjects::endFrame() {
     m_framesInFlight--;
 }
 
-uint32_t SyncObjects::getCurrentFrame() const {
-    return m_currentFrame;
-}
-
 bool SyncObjects::isFrameComplete() const {
     return m_framesInFlight == 0;
 }

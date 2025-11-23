@@ -432,6 +432,14 @@ bool ShaderSystem::loadShaderFile(const std::string& path, std::vector<char>& co
         return false;
     }
 
+    // Check if this is a SPIR-V file (starts with the magic number)
+    if (fileSize >= 4) {
+        uint32_t magic = *reinterpret_cast<const uint32_t*>(code.data());
+        if (magic != 0x07230203) { // SPIR-V magic number
+            std::cerr << "Warning: Shader file " << path << " doesn't appear to be SPIR-V (magic: 0x" << std::hex << magic << std::dec << ")" << std::endl;
+        }
+    }
+
     return true;
 }
 

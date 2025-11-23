@@ -1,0 +1,11 @@
+/home/gabi/vulkan_game/build/CMakeFiles/edit_cache.dir
+/home/gabi/vulkan_game/build/CMakeFiles/rebuild_cache.dir
+/home/gabi/vulkan_game/build/engine/CMakeFiles/vortex_core.dir
+/home/gabi/vulkan_game/build/engine/CMakeFiles/edit_cache.dir
+/home/gabi/vulkan_game/build/engine/CMakeFiles/rebuild_cache.dir
+/home/gabi/vulkan_game/build/tools/CMakeFiles/edit_cache.dir
+/home/gabi/vulkan_game/build/tools/CMakeFiles/rebuild_cache.dir
+/home/gabi/vulkan_game/build/examples/CMakeFiles/test_scene.dir
+/home/gabi/vulkan_game/build/examples/CMakeFiles/triangle_rendering_demo.dir
+/home/gabi/vulkan_game/build/examples/CMakeFiles/edit_cache.dir
+/home/gabi/vulkan_game/build/examples/CMakeFiles/rebuild_cache.dir

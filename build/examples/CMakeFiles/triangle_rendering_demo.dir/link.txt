@@ -1,1 +1,0 @@
-/usr/bin/c++ -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/triangle_rendering_demo.dir/link.d CMakeFiles/triangle_rendering_demo.dir/test_scene/triangle_rendering_demo.cpp.o -o triangle_rendering_demo  ../engine/libvortex_core.a /lib/libvulkan.so /usr/lib/libSDL2-2.0.so.0.3200.58 -lX11

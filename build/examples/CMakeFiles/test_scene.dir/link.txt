@@ -1,1 +1,0 @@
-/usr/bin/c++ -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/test_scene.dir/link.d CMakeFiles/test_scene.dir/test_scene/interactive_main.cpp.o -o test_scene  ../engine/libvortex_core.a /lib/libvulkan.so /usr/lib/libSDL2-2.0.so.0.3200.58 -lX11

@@ -185,7 +185,7 @@ void SyncObjects::waitForFrame() {
 
     // Wait for the fence for the current frame to be signaled
     if (m_framesInFlight > 0) {
-        vkWaitForFences(m_device, 1, &m_inFlightFences[m_currentFrame], VK_TRUE, 
+        vkWaitForFences(m_device, 1, &m_inFlightFences[m_currentFrame], VK_TRUE,
                        std::numeric_limits<uint64_t>::max());
     }
 }
@@ -200,8 +200,6 @@ void SyncObjects::beginFrame() {
 
     // Reset the fence for the current frame
     vkResetFences(m_device, 1, &m_inFlightFences[m_currentFrame]);
-    
-    m_framesInFlight++;
 }
 
 void SyncObjects::endFrame() {
@@ -209,8 +207,6 @@ void SyncObjects::endFrame() {
         std::cerr << "Cannot end frame - sync objects not created" << std::endl;
         return;
     }
-
-    m_framesInFlight--;
 }
 
 bool SyncObjects::isFrameComplete() const {

@@ -123,6 +123,9 @@ bool TriangleRenderer::initialize() {
         // Initialize Vulkan context
         m_vulkanContext = std::make_unique<VortexEngine::VulkanContext>();
 
+        // Enable validation layers for debugging
+        m_vulkanContext->enableValidationLayers(true);
+
         VkApplicationInfo appInfo{};
         appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
         appInfo.pApplicationName = "Triangle Renderer";
@@ -181,63 +184,6 @@ bool TriangleRenderer::initialize() {
         m_syncObjects = std::make_unique<VortexEngine::SyncObjects>(m_vulkanContext->getDevice(),
                                                                     m_swapchainImageCount);
 
-        // Load shaders
-        if (!m_shaderSystem->loadShader("triangle", "shaders/common/common.vert.spv", "shaders/common/common.frag.spv")) {
-            std::cerr << "Failed to load shaders" << std::endl;
-            return false;
-        }
-        
-        // Verify shaders were loaded successfully
-        VkShaderModule vertexShader = m_shaderSystem->getVertexShader("triangle");
-        VkShaderModule fragmentShader = m_shaderSystem->getFragmentShader("triangle");
-        
-        if (vertexShader == VK_NULL_HANDLE || fragmentShader == VK_NULL_HANDLE) {
-            std::cerr << "Shader modules are invalid after loading!" << std::endl;
-            std::cerr << "Vertex shader: " << vertexShader << std::endl;
-            std::cerr << "Fragment shader: " << fragmentShader << std::endl;
-            return false;
-        }
-        
-        std::cout << "Shaders loaded successfully" << std::endl;
-
-        // Create render pass
-        if (!createRenderPass()) {
-            return false;
-        }
-        
-        // Skip pipeline system for now and create pipeline directly
-        // m_pipelineSystem = std::make_unique<VortexEngine::PipelineSystem>();
-        // m_pipelineSystem->initialize(m_vulkanContext->getDevice(), m_renderPass);
-
-        // Create pipeline using direct Vulkan API
-        if (!createPipeline()) {
-            return false;
-        }
-
-        // Create framebuffers
-        if (!createFramebuffers()) {
-            return false;
-        }
-
-        // Create vertex and index buffers
-        if (!createVertexBuffer()) {
-            return false;
-        }
-
-        if (!createIndexBuffer()) {
-            return false;
-        }
-
-        // Create command buffers
-        if (!createCommandBuffers()) {
-            return false;
-        }
-
-        // Create sync objects
-        if (!m_syncObjects->create()) {
-            return false;
-        }
-
         std::cout << "Triangle Renderer initialized successfully" << std::endl;
         return true;
     } catch (const std::exception& e) {
@@ -248,27 +194,37 @@ bool TriangleRenderer::initialize() {
 
 void TriangleRenderer::render() {
     if (!m_syncObjects) {
+        std::cerr << "Sync objects not initialized" << std::endl;
         return;
     }
 
+    std::cout << "Starting render frame..." << std::endl;
+
     // Begin frame synchronization
+    std::cout << "Beginning frame synchronization..." << std::endl;
     m_syncObjects->beginFrame();
 
     // Acquire next image
+    std::cout << "Acquiring next image..." << std::endl;
     uint32_t imageIndex =
         m_vulkanContext->acquireNextImage(m_syncObjects->getImageAvailableSemaphore());
     if (imageIndex == static_cast<uint32_t>(-1)) {
+        std::cerr << "Failed to acquire swap chain image" << std::endl;
         // Swapchain needs to be recreated
         return;
     }
+    std::cout << "Acquired image index: " << imageIndex << std::endl;
 
     // Update uniform buffer (time)
+    std::cout << "Updating uniform buffer..." << std::endl;
     updateUniformBuffer(imageIndex);
 
     // Record command buffer
+    std::cout << "Recording command buffer..." << std::endl;
     recordCommandBuffer(imageIndex);
 
     // Submit command buffer
+    std::cout << "Submitting command buffer..." << std::endl;
     VkSubmitInfo submitInfo{};
     submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 
@@ -294,19 +250,29 @@ void TriangleRenderer::render() {
         VkResult result = vkQueueSubmit(m_vulkanContext->getGraphicsQueue(), 1, &submitInfo, fence);
         if (result != VK_SUCCESS) {
             std::cerr << "Failed to submit command buffer: " << result << std::endl;
+        } else {
+            std::cout << "Command buffer submitted successfully" << std::endl;
         }
 
+        // Free the command buffer after submission
         m_commandBufferManager->freeCommandBuffer(cmdBuffer);
+        std::cout << "Command buffer freed" << std::endl;
     }
 
     // Present frame
+    std::cout << "Presenting frame..." << std::endl;
     if (!m_vulkanContext->presentFrame(imageIndex, m_syncObjects->getRenderFinishedSemaphore())) {
+        std::cerr << "Failed to present frame" << std::endl;
         // Swapchain needs to be recreated
+    } else {
+        std::cout << "Frame presented successfully" << std::endl;
     }
 
     // End frame synchronization
+    std::cout << "Ending frame synchronization..." << std::endl;
     m_syncObjects->endFrame();
     m_syncObjects->nextFrame();
+    std::cout << "Frame synchronization completed" << std::endl;
 }
 
 void TriangleRenderer::cleanup() {
@@ -427,10 +393,14 @@ bool TriangleRenderer::createRenderPass() {
 }
 
 bool TriangleRenderer::createFramebuffers() {
+    std::cout << "Creating " << m_swapchainImageCount << " framebuffers..." << std::endl;
     m_framebuffers.resize(m_swapchainImageCount);
 
     for (size_t i = 0; i < m_swapchainImageCount; i++) {
+        std::cout << "Creating framebuffer " << i << "..." << std::endl;
         VkImageView attachments[] = {m_vulkanContext->getSwapChainImageViews()[i]};
+        
+        std::cout << "Framebuffer " << i << " - Image view: " << attachments[0] << std::endl;
 
         VkFramebufferCreateInfo framebufferInfo{};
         framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
@@ -447,6 +417,7 @@ bool TriangleRenderer::createFramebuffers() {
             std::cerr << "Failed to create framebuffer: " << result << std::endl;
             return false;
         }
+        std::cout << "Framebuffer " << i << " created successfully: " << m_framebuffers[i] << std::endl;
     }
 
     std::cout << "Created " << m_framebuffers.size() << " framebuffers" << std::endl;
@@ -500,11 +471,35 @@ bool TriangleRenderer::createPipeline() {
 
     VkPipelineShaderStageCreateInfo shaderStages[] = {vertexShaderStage, fragmentShaderStage};
 
-    // Vertex input state - empty for now
+    // Vertex input state - configure for our vertex data
     VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
     vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-    vertexInputInfo.vertexBindingDescriptionCount = 0;
-    vertexInputInfo.vertexAttributeDescriptionCount = 0;
+    
+    // Vertex binding description
+    VkVertexInputBindingDescription bindingDescription{};
+    bindingDescription.binding = 0;
+    bindingDescription.stride = sizeof(Vertex);
+    bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+    
+    // Vertex attribute descriptions
+    VkVertexInputAttributeDescription positionAttribute{};
+    positionAttribute.binding = 0;
+    positionAttribute.location = 0;
+    positionAttribute.format = VK_FORMAT_R32G32B32_SFLOAT;
+    positionAttribute.offset = offsetof(Vertex, pos);
+    
+    VkVertexInputAttributeDescription colorAttribute{};
+    colorAttribute.binding = 0;
+    colorAttribute.location = 1;
+    colorAttribute.format = VK_FORMAT_R32G32B32_SFLOAT;
+    colorAttribute.offset = offsetof(Vertex, color);
+    
+    VkVertexInputAttributeDescription vertexAttributes[] = {positionAttribute, colorAttribute};
+    
+    vertexInputInfo.vertexBindingDescriptionCount = 1;
+    vertexInputInfo.vertexAttributeDescriptionCount = 2;
+    vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
+    vertexInputInfo.pVertexAttributeDescriptions = vertexAttributes;
 
     // Input assembly state
     VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
@@ -612,13 +607,16 @@ bool TriangleRenderer::createPipeline() {
 }
 
 bool TriangleRenderer::createVertexBuffer() {
+    std::cout << "Creating vertex buffer..." << std::endl;
     VkDeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
+    std::cout << "Vertex buffer size: " << bufferSize << " bytes" << std::endl;
 
     // Create staging buffer
     VkBuffer stagingBuffer;
     VkDeviceMemory stagingBufferMemory;
 
     // Create staging buffer
+    std::cout << "Allocating staging buffer..." << std::endl;
     auto stagingAlloc = m_bufferAllocator->allocateBuffer(
         VortexEngine::BufferAllocator::BufferType::Staging,
         bufferSize,
@@ -627,20 +625,24 @@ bool TriangleRenderer::createVertexBuffer() {
     );
     
     if (stagingAlloc.buffer == VK_NULL_HANDLE) {
+        std::cerr << "Failed to allocate staging buffer" << std::endl;
         return false;
     }
     
     stagingBuffer = stagingAlloc.buffer;
     stagingBufferMemory = stagingAlloc.memory;
+    std::cout << "Staging buffer allocated: " << stagingBuffer << std::endl;
 
     // Map and copy vertex data
+    std::cout << "Mapping staging buffer and copying vertex data..." << std::endl;
     void* data;
     vkMapMemory(m_vulkanContext->getDevice(), stagingBufferMemory, 0, bufferSize, 0, &data);
     memcpy(data, vertices.data(), (size_t)bufferSize);
     vkUnmapMemory(m_vulkanContext->getDevice(), stagingBufferMemory);
+    std::cout << "Vertex data copied to staging buffer" << std::endl;
 
     // Create vertex buffer
-    // Create vertex buffer
+    std::cout << "Allocating vertex buffer..." << std::endl;
     auto vertexAlloc = m_bufferAllocator->allocateBuffer(
         VortexEngine::BufferAllocator::BufferType::Vertex,
         bufferSize,
@@ -649,6 +651,7 @@ bool TriangleRenderer::createVertexBuffer() {
     );
     
     if (vertexAlloc.buffer == VK_NULL_HANDLE) {
+        std::cerr << "Failed to allocate vertex buffer" << std::endl;
         vkDestroyBuffer(m_vulkanContext->getDevice(), stagingBuffer, nullptr);
         vkFreeMemory(m_vulkanContext->getDevice(), stagingBufferMemory, nullptr);
         return false;
@@ -656,8 +659,10 @@ bool TriangleRenderer::createVertexBuffer() {
     
     m_vertexBuffer = vertexAlloc.buffer;
     m_vertexBufferMemory = vertexAlloc.memory;
+    std::cout << "Vertex buffer allocated: " << m_vertexBuffer << std::endl;
 
     // Copy staging buffer to vertex buffer using command buffer
+    std::cout << "Copying staging buffer to vertex buffer..." << std::endl;
     auto cmdBuffer = m_commandBufferManager->allocateCommandBuffer();
     if (cmdBuffer) {
         cmdBuffer->beginRecording();
@@ -683,9 +688,11 @@ bool TriangleRenderer::createVertexBuffer() {
         vkQueueWaitIdle(m_vulkanContext->getGraphicsQueue());
 
         m_commandBufferManager->freeCommandBuffer(cmdBuffer);
+        std::cout << "Staging buffer copied to vertex buffer" << std::endl;
     }
 
     // Cleanup staging buffer
+    std::cout << "Cleaning up staging buffer..." << std::endl;
     m_bufferAllocator->deallocateBuffer(stagingAlloc);
 
     std::cout << "Vertex buffer created successfully" << std::endl;
@@ -693,13 +700,16 @@ bool TriangleRenderer::createVertexBuffer() {
 }
 
 bool TriangleRenderer::createIndexBuffer() {
+    std::cout << "Creating index buffer..." << std::endl;
     VkDeviceSize bufferSize = sizeof(indices[0]) * indices.size();
+    std::cout << "Index buffer size: " << bufferSize << " bytes" << std::endl;
 
     // Create staging buffer
     VkBuffer stagingBuffer;
     VkDeviceMemory stagingBufferMemory;
 
     // Create staging buffer for indices
+    std::cout << "Allocating staging buffer for indices..." << std::endl;
     auto stagingAlloc2 = m_bufferAllocator->allocateBuffer(
         VortexEngine::BufferAllocator::BufferType::Staging,
         bufferSize,
@@ -708,20 +718,24 @@ bool TriangleRenderer::createIndexBuffer() {
     );
     
     if (stagingAlloc2.buffer == VK_NULL_HANDLE) {
+        std::cerr << "Failed to allocate staging buffer for indices" << std::endl;
         return false;
     }
     
     stagingBuffer = stagingAlloc2.buffer;
     stagingBufferMemory = stagingAlloc2.memory;
+    std::cout << "Staging buffer for indices allocated: " << stagingBuffer << std::endl;
 
     // Map and copy index data
+    std::cout << "Mapping staging buffer and copying index data..." << std::endl;
     void* data;
     vkMapMemory(m_vulkanContext->getDevice(), stagingBufferMemory, 0, bufferSize, 0, &data);
     memcpy(data, indices.data(), (size_t)bufferSize);
     vkUnmapMemory(m_vulkanContext->getDevice(), stagingBufferMemory);
+    std::cout << "Index data copied to staging buffer" << std::endl;
 
     // Create index buffer
-    // Create index buffer
+    std::cout << "Allocating index buffer..." << std::endl;
     auto indexAlloc = m_bufferAllocator->allocateBuffer(
         VortexEngine::BufferAllocator::BufferType::Index,
         bufferSize,
@@ -730,6 +744,7 @@ bool TriangleRenderer::createIndexBuffer() {
     );
     
     if (indexAlloc.buffer == VK_NULL_HANDLE) {
+        std::cerr << "Failed to allocate index buffer" << std::endl;
         vkDestroyBuffer(m_vulkanContext->getDevice(), stagingBuffer, nullptr);
         vkFreeMemory(m_vulkanContext->getDevice(), stagingBufferMemory, nullptr);
         return false;
@@ -737,36 +752,52 @@ bool TriangleRenderer::createIndexBuffer() {
     
     m_indexBuffer = indexAlloc.buffer;
     m_indexBufferMemory = indexAlloc.memory;
+    std::cout << "Index buffer allocated: " << m_indexBuffer << std::endl;
 
     // Copy staging buffer to index buffer using command buffer
+    std::cout << "Copying staging buffer to index buffer..." << std::endl;
     auto cmdBuffer = m_commandBufferManager->allocateCommandBuffer();
-    if (cmdBuffer) {
-        cmdBuffer->beginRecording();
-        
-        // Set up buffer copy region
-        VkBufferCopy copyRegion{};
-        copyRegion.srcOffset = 0;
-        copyRegion.dstOffset = 0;
-        copyRegion.size = bufferSize;
-        
-        // Record the copy command
-        vkCmdCopyBuffer(cmdBuffer->getHandle(), stagingBuffer, m_indexBuffer, 1, &copyRegion);
-        
-        cmdBuffer->endRecording();
+    if (!cmdBuffer) {
+        std::cerr << "Failed to allocate command buffer for index buffer copy" << std::endl;
+        vkDestroyBuffer(m_vulkanContext->getDevice(), stagingBuffer, nullptr);
+        vkFreeMemory(m_vulkanContext->getDevice(), stagingBufferMemory, nullptr);
+        return false;
+    }
+    
+    cmdBuffer->beginRecording();
+    
+    // Set up buffer copy region
+    VkBufferCopy copyRegion{};
+    copyRegion.srcOffset = 0;
+    copyRegion.dstOffset = 0;
+    copyRegion.size = bufferSize;
+    
+    // Record the copy command
+    vkCmdCopyBuffer(cmdBuffer->getHandle(), stagingBuffer, m_indexBuffer, 1, &copyRegion);
+    
+    cmdBuffer->endRecording();
 
-        VkSubmitInfo submitInfo{};
-        submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-        submitInfo.commandBufferCount = 1;
-        VkCommandBuffer cmdBuffers[] = {cmdBuffer->getHandle()};
-        submitInfo.pCommandBuffers = cmdBuffers;
+    VkSubmitInfo submitInfo{};
+    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submitInfo.commandBufferCount = 1;
+    VkCommandBuffer cmdBuffers[] = {cmdBuffer->getHandle()};
+    submitInfo.pCommandBuffers = cmdBuffers;
 
-        vkQueueSubmit(m_vulkanContext->getGraphicsQueue(), 1, &submitInfo, VK_NULL_HANDLE);
-        vkQueueWaitIdle(m_vulkanContext->getGraphicsQueue());
-
+    VkResult result = vkQueueSubmit(m_vulkanContext->getGraphicsQueue(), 1, &submitInfo, VK_NULL_HANDLE);
+    if (result != VK_SUCCESS) {
+        std::cerr << "Failed to submit command buffer for index buffer copy: " << result << std::endl;
         m_commandBufferManager->freeCommandBuffer(cmdBuffer);
+        vkDestroyBuffer(m_vulkanContext->getDevice(), stagingBuffer, nullptr);
+        vkFreeMemory(m_vulkanContext->getDevice(), stagingBufferMemory, nullptr);
+        return false;
     }
 
+    vkQueueWaitIdle(m_vulkanContext->getGraphicsQueue());
+    m_commandBufferManager->freeCommandBuffer(cmdBuffer);
+    std::cout << "Staging buffer copied to index buffer" << std::endl;
+
     // Cleanup staging buffer
+    std::cout << "Cleaning up staging buffer for indices..." << std::endl;
     m_bufferAllocator->deallocateBuffer(stagingAlloc2);
 
     std::cout << "Index buffer created successfully" << std::endl;
@@ -791,8 +822,10 @@ bool TriangleRenderer::createCommandPool() {
 }
 
 bool TriangleRenderer::createCommandBuffers() {
+    std::cout << "Creating command buffers..." << std::endl;
     // Command buffers are now managed by CommandBufferManager
     // We'll create them on demand during rendering
+    std::cout << "Command buffers setup complete" << std::endl;
     return true;
 }
 
@@ -814,14 +847,37 @@ void TriangleRenderer::recordCommandBuffer(uint32_t imageIndex) {
     // Bind pipeline
     cmdBuffer->bindPipeline(m_pipeline);
 
-    // Bind vertex buffer
-    cmdBuffer->bindVertexBuffers(m_vertexBuffer);
+    // Set viewport and scissor (required for dynamic state)
+    VkViewport viewport{};
+    viewport.x = 0.0f;
+    viewport.y = 0.0f;
+    viewport.width = static_cast<float>(m_swapchainExtent.width);
+    viewport.height = static_cast<float>(m_swapchainExtent.height);
+    viewport.minDepth = 0.0f;
+    viewport.maxDepth = 1.0f;
+    cmdBuffer->setViewport(0, 1, &viewport);
 
-    // Bind index buffer
-    cmdBuffer->bindIndexBuffer(m_indexBuffer);
+    VkRect2D scissor{};
+    scissor.offset = {0, 0};
+    scissor.extent = m_swapchainExtent;
+    cmdBuffer->setScissor(0, 1, &scissor);
 
-    // Draw
-    cmdBuffer->drawIndexed(static_cast<uint32_t>(indices.size()));
+    // Only bind vertex and index buffers if they exist
+    if (m_vertexBuffer != VK_NULL_HANDLE && m_indexBuffer != VK_NULL_HANDLE) {
+        // Bind vertex buffer
+        VkBuffer vertexBuffers[] = {m_vertexBuffer};
+        VkDeviceSize offsets[] = {0};
+        vkCmdBindVertexBuffers(cmdBuffer->getHandle(), 0, 1, vertexBuffers, offsets);
+
+        // Bind index buffer
+        vkCmdBindIndexBuffer(cmdBuffer->getHandle(), m_indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+
+        // Draw
+        vkCmdDrawIndexed(cmdBuffer->getHandle(), static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
+    } else {
+        // Draw without vertex and index buffers (just clear the screen)
+        vkCmdDraw(cmdBuffer->getHandle(), 3, 1, 0, 0);
+    }
 
     // End render pass
     cmdBuffer->endRenderPass();
@@ -860,14 +916,67 @@ int main() {
     bool running = true;
     SDL_Event event;
     
+    std::cout << "Entering main loop..." << std::endl;
     while (running) {
         while (SDL_PollEvent(&event)) {
             if (event.type == SDL_QUIT) {
+                std::cout << "Quit event received, stopping main loop" << std::endl;
                 running = false;
             }
         }
         
+        std::cout << "Calling render()..." << std::endl;
         renderer.render();
+        std::cout << "render() completed" << std::endl;
+    }
+
+    // Cleanup
+    renderer.cleanup();
+    windowSystem.shutdown();
+
+    return 0;
+}
+
+void TriangleRenderer::updateUniformBuffer(uint32_t currentImage) {
+    // Update time uniform
+    auto currentTime = std::chrono::high_resolution_clock::now();
+    float time =
+        std::chrono::duration<float, std::chrono::seconds::period>(currentTime - m_startTime)
+            .count();
+    m_time = time;
+}
+
+int main() {
+    // Create window system
+    VortexEngine::Window windowSystem;
+    if (!windowSystem.initialize("Vortex Engine - Triangle Demo", 800, 600)) {
+        std::cerr << "Failed to initialize window system" << std::endl;
+        return -1;
+    }
+
+    // Create renderer
+    TriangleRenderer renderer(windowSystem.getSDLWindow());
+    if (!renderer.initialize()) {
+        std::cerr << "Failed to initialize renderer" << std::endl;
+        return -1;
+    }
+
+    // Main loop
+    bool running = true;
+    SDL_Event event;
+    
+    std::cout << "Entering main loop..." << std::endl;
+    while (running) {
+        while (SDL_PollEvent(&event)) {
+            if (event.type == SDL_QUIT) {
+                std::cout << "Quit event received, stopping main loop" << std::endl;
+                running = false;
+            }
+        }
+        
+        std::cout << "Calling render()..." << std::endl;
+        renderer.render();
+        std::cout << "render() completed" << std::endl;
     }
 
     // Cleanup

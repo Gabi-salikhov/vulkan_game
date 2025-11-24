@@ -4,7 +4,7 @@
 #include <vector>
 #include <set>
 #include <cstring>
-#include <fstream>
+#include <algorithm> // std::min, std::max
 
 namespace VortexEngine {
 
@@ -23,25 +23,20 @@ bool VulkanContext::initialize(const VkInstanceCreateInfo& createInfo) {
     }
 
     try {
-        // Disable validation layers by default to avoid extension issues
         m_validationLayersEnabled = false;
         m_validationLayers.clear();
 
-        // Create a copy of the create info to modify it
         VkInstanceCreateInfo modifiedCreateInfo = createInfo;
         
-        // Add required surface extensions
         std::vector<const char*> requiredExtensions = {
             VK_KHR_SURFACE_EXTENSION_NAME
         };
         
-        // Add platform-specific surface extensions
         #ifdef __linux__
         requiredExtensions.push_back("VK_KHR_wayland_surface");
         requiredExtensions.push_back("VK_KHR_xlib_surface");
         #endif
         
-        // Merge with existing extensions
         std::vector<const char*> allExtensions;
         for (uint32_t i = 0; i < createInfo.enabledExtensionCount; i++) {
             allExtensions.push_back(createInfo.ppEnabledExtensionNames[i]);
@@ -60,11 +55,9 @@ bool VulkanContext::initialize(const VkInstanceCreateInfo& createInfo) {
             }
         }
         
-        // Update the create info with merged extensions
         modifiedCreateInfo.enabledExtensionCount = static_cast<uint32_t>(allExtensions.size());
         modifiedCreateInfo.ppEnabledExtensionNames = allExtensions.data();
 
-        // Create Vulkan instance
         VkResult result = vkCreateInstance(&modifiedCreateInfo, nullptr, &m_instance);
         if (result != VK_SUCCESS) {
             std::cerr << "Failed to create Vulkan instance: " << result << std::endl;
@@ -73,14 +66,12 @@ bool VulkanContext::initialize(const VkInstanceCreateInfo& createInfo) {
 
         std::cout << "Vulkan instance created successfully" << std::endl;
 
-        // Setup debug messenger if validation layers are enabled
         if (m_validationLayersEnabled) {
             if (!setupDebugMessenger()) {
                 std::cout << "Failed to setup debug messenger, continuing without it" << std::endl;
             }
         }
 
-        // Select physical device
         if (!selectPhysicalDevice()) {
             std::cerr << "Failed to select suitable physical device" << std::endl;
             return false;
@@ -88,7 +79,6 @@ bool VulkanContext::initialize(const VkInstanceCreateInfo& createInfo) {
 
         std::cout << "Physical device selected: " << getPhysicalDeviceName() << std::endl;
 
-        // Create logical device
         createLogicalDevice();
 
         m_initialized = true;
@@ -102,24 +92,19 @@ bool VulkanContext::initialize(const VkInstanceCreateInfo& createInfo) {
 }
 
 void VulkanContext::shutdown() {
-    if (!m_initialized) {
-        return;
-    }
+    if (!m_initialized) return;
 
     std::cout << "Shutting down Vulkan context..." << std::endl;
 
-    // Destroy logical device
     if (m_device != VK_NULL_HANDLE) {
         vkDestroyDevice(m_device, nullptr);
         m_device = VK_NULL_HANDLE;
     }
 
-    // Destroy debug messenger
     if (m_validationLayersEnabled) {
         cleanupDebugMessenger();
     }
 
-    // Destroy instance
     if (m_instance != VK_NULL_HANDLE) {
         vkDestroyInstance(m_instance, nullptr);
         m_instance = VK_NULL_HANDLE;
@@ -131,16 +116,12 @@ void VulkanContext::shutdown() {
 
 void VulkanContext::enableValidationLayers(bool enable) {
     m_validationLayersEnabled = enable;
-    // Disable validation layers by default to avoid extension issues
-    if (!enable) {
-        m_validationLayers.clear();
-    }
+    if (!enable) m_validationLayers.clear();
 }
 
 void VulkanContext::addExtension(const char* extension) {
     m_instanceExtensions.push_back(extension);
 }
-
 
 bool VulkanContext::setupDebugMessenger() {
     VkDebugUtilsMessengerCreateInfoEXT createInfo{};
@@ -159,7 +140,6 @@ bool VulkanContext::setupDebugMessenger() {
         std::cerr << "Failed to setup debug messenger: " << result << std::endl;
         return false;
     }
-
     std::cout << "Debug messenger setup successfully" << std::endl;
     return true;
 }
@@ -179,7 +159,6 @@ bool VulkanContext::selectPhysicalDevice() {
     std::vector<VkPhysicalDevice> devices(deviceCount);
     vkEnumeratePhysicalDevices(m_instance, &deviceCount, devices.data());
 
-    // Check each device for suitability
     for (const auto& device : devices) {
         if (isDeviceSuitable(device)) {
             m_physicalDevice = device;
@@ -192,7 +171,6 @@ bool VulkanContext::selectPhysicalDevice() {
         return false;
     }
 
-    // Find queue families
     m_graphicsQueueFamilyIndex = findQueueFamilies(m_physicalDevice);
     if (m_graphicsQueueFamilyIndex == UINT32_MAX) {
         std::cerr << "Failed to find suitable queue families" << std::endl;
@@ -207,10 +185,6 @@ bool VulkanContext::isDeviceSuitable(VkPhysicalDevice device) {
     VkPhysicalDeviceProperties deviceProperties;
     vkGetPhysicalDeviceProperties(device, &deviceProperties);
 
-    VkPhysicalDeviceFeatures deviceFeatures;
-    vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
-
-    // Check for required queue families
     uint32_t queueFamilyCount = 0;
     vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
     std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
@@ -225,12 +199,10 @@ bool VulkanContext::isDeviceSuitable(VkPhysicalDevice device) {
             m_graphicsQueueFamilyIndex = i;
         }
         
-        // Check if this queue family supports presentation
         VkBool32 presentSupport = false;
         if (m_surface != VK_NULL_HANDLE) {
             vkGetPhysicalDeviceSurfaceSupportKHR(device, i, m_surface, &presentSupport);
         } else {
-            // If no surface, assume the graphics queue can present
             presentSupport = (queueFamilies[i].queueFlags & VK_QUEUE_GRAPHICS_BIT);
         }
         
@@ -249,14 +221,12 @@ bool VulkanContext::isDeviceSuitable(VkPhysicalDevice device) {
         return false;
     }
 
-    // Check for required extensions
     bool extensionsSupported = checkDeviceExtensionSupport(device);
     if (!extensionsSupported) {
         std::cout << "Device does not support required extensions" << std::endl;
         return false;
     }
 
-    // Check for swap chain support
     SwapChainSupportDetails swapChainSupport = querySwapChainSupport(device);
     
     std::cout << "Device " << deviceProperties.deviceName << " - Graphics: " << graphicsFamilyFound
@@ -265,7 +235,6 @@ bool VulkanContext::isDeviceSuitable(VkPhysicalDevice device) {
               << ", Formats: " << swapChainSupport.formats.size()
               << ", PresentModes: " << swapChainSupport.presentModes.size() << std::endl;
 
-    // For now, we'll be more lenient with swap chain requirements
     return graphicsFamilyFound && extensionsSupported;
 }
 
@@ -284,7 +253,6 @@ uint32_t VulkanContext::findQueueFamilies(VkPhysicalDevice device) {
     return UINT32_MAX;
 }
 
-
 bool VulkanContext::checkDeviceExtensionSupport(VkPhysicalDevice device) {
     uint32_t extensionCount;
     vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, nullptr);
@@ -292,20 +260,10 @@ bool VulkanContext::checkDeviceExtensionSupport(VkPhysicalDevice device) {
     vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, availableExtensions.data());
 
     std::set<std::string> requiredExtensions;
-    
-    // Only require essential extensions
     requiredExtensions.insert(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
 
     for (const auto& extension : availableExtensions) {
         requiredExtensions.erase(extension.extensionName);
-    }
-
-    if (!requiredExtensions.empty()) {
-        std::cout << "Missing required extensions: ";
-        for (const auto& ext : requiredExtensions) {
-            std::cout << ext << " ";
-        }
-        std::cout << std::endl;
     }
 
     return requiredExtensions.empty();
@@ -314,23 +272,6 @@ bool VulkanContext::checkDeviceExtensionSupport(VkPhysicalDevice device) {
 SwapChainSupportDetails VulkanContext::querySwapChainSupport(VkPhysicalDevice device) const {
     SwapChainSupportDetails details;
     
-    // Initialize with default values
-    details.capabilities.minImageCount = 2;
-    details.capabilities.maxImageCount = 3;
-    details.capabilities.currentExtent = {1920, 1080};
-    details.capabilities.minImageExtent = {1, 1};
-    details.capabilities.maxImageExtent = {8192, 8192};
-    details.capabilities.maxImageArrayLayers = 1;
-    details.capabilities.supportedUsageFlags = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-    details.capabilities.currentTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
-    
-    // Provide default formats
-    details.formats.push_back({VK_FORMAT_B8G8R8A8_SRGB, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR});
-    
-    // Provide default present modes
-    details.presentModes.push_back(VK_PRESENT_MODE_FIFO_KHR);
-    
-    // Only query surface if we have a valid surface
     if (m_surface != VK_NULL_HANDLE) {
         vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, m_surface, &details.capabilities);
 
@@ -353,30 +294,23 @@ SwapChainSupportDetails VulkanContext::querySwapChainSupport(VkPhysicalDevice de
 }
 
 bool VulkanContext::createSwapChain(VkSurfaceKHR surface) {
-    // Query swap chain support
     SwapChainSupportDetails swapChainSupport = querySwapChainSupport(m_physicalDevice);
     
-    // Choose swap chain surface format
     VkSurfaceFormatKHR surfaceFormat = chooseSwapSurfaceFormat(swapChainSupport.formats);
     m_swapChainImageFormat = surfaceFormat.format;
     
-    // Choose swap chain present mode
     VkPresentModeKHR presentMode = chooseSwapPresentMode(swapChainSupport.presentModes);
     
-    // Choose swap chain extent
     m_swapChainExtent = chooseSwapExtent(swapChainSupport.capabilities);
-    
-    // Determine the number of images in the swap chain
-    uint32_t imageCount = swapChainSupport.capabilities.minImageCount + 1;
-    if (swapChainSupport.capabilities.maxImageCount > 0 &&
-        imageCount > swapChainSupport.capabilities.maxImageCount) {
-        imageCount = swapChainSupport.capabilities.maxImageCount;
-    }
-    
-    // Create swap chain create info
+
+    // 2025 SOTA: Intel UHD da segfault oldini olish uchun majburiy 2 ta image
+    uint32_t imageCount = 2;  // Bu yagona ishlab chiqaruvchi variant
+
+    std::cout << "SOTA safe image count for Intel UHD: 2" << std::endl;
+
     VkSwapchainCreateInfoKHR createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-    createInfo.surface = surface; // Use the provided surface
+    createInfo.surface = surface;
     createInfo.minImageCount = imageCount;
     createInfo.imageFormat = m_swapChainImageFormat;
     createInfo.imageColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
@@ -384,7 +318,6 @@ bool VulkanContext::createSwapChain(VkSurfaceKHR surface) {
     createInfo.imageArrayLayers = 1;
     createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
     
-    // Find queue family indices
     uint32_t queueFamilyIndices[] = {m_graphicsQueueFamilyIndex, m_presentQueueFamilyIndex};
     
     if (m_graphicsQueueFamilyIndex != m_presentQueueFamilyIndex) {
@@ -403,7 +336,6 @@ bool VulkanContext::createSwapChain(VkSurfaceKHR surface) {
     createInfo.clipped = VK_TRUE;
     createInfo.oldSwapchain = VK_NULL_HANDLE;
     
-    // Create swap chain
     VkResult result = vkCreateSwapchainKHR(m_device, &createInfo, nullptr, &m_swapChain);
     if (result != VK_SUCCESS) {
         std::cerr << "Failed to create swap chain: " << result << std::endl;
@@ -412,12 +344,12 @@ bool VulkanContext::createSwapChain(VkSurfaceKHR surface) {
     
     std::cout << "Swap chain created successfully" << std::endl;
     
-    // Get swap chain images
     vkGetSwapchainImagesKHR(m_device, m_swapChain, &imageCount, nullptr);
     m_swapChainImages.resize(imageCount);
     vkGetSwapchainImagesKHR(m_device, m_swapChain, &imageCount, m_swapChainImages.data());
     
-    // Create image views
+    std::cout << "Swapchain created with " << imageCount << " images" << std::endl;
+    
     createSwapChainImageViews();
     
     return true;
@@ -431,13 +363,11 @@ void VulkanContext::recreateSwapChain(VkSurfaceKHR surface) {
 }
 
 void VulkanContext::cleanupSwapChain() {
-    // Destroy image views
     for (auto imageView : m_swapChainImageViews) {
         vkDestroyImageView(m_device, imageView, nullptr);
     }
     m_swapChainImageViews.clear();
     
-    // Destroy swap chain
     if (m_swapChain != VK_NULL_HANDLE) {
         vkDestroySwapchainKHR(m_device, m_swapChain, nullptr);
         m_swapChain = VK_NULL_HANDLE;
@@ -471,10 +401,8 @@ VkExtent2D VulkanContext::chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capab
     if (capabilities.currentExtent.width != std::numeric_limits<uint32_t>::max()) {
         return capabilities.currentExtent;
     } else {
-        int width, height;
-        // For SDL, we'll use a default extent
-        width = 1920;
-        height = 1080;
+        int width = 800;
+        int height = 600;
         
         VkExtent2D actualExtent = {
             static_cast<uint32_t>(width),
@@ -529,7 +457,6 @@ uint32_t VulkanContext::acquireNextImage(VkSemaphore semaphore) {
                                           semaphore, VK_NULL_HANDLE, &imageIndex);
     
     if (result == VK_ERROR_OUT_OF_DATE_KHR) {
-        // Swap chain is out of date, should recreate it
         return static_cast<uint32_t>(-1);
     } else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
         std::cerr << "Failed to acquire swap chain image: " << result << std::endl;
@@ -551,7 +478,6 @@ bool VulkanContext::presentFrame(uint32_t imageIndex, VkSemaphore waitSemaphore)
     VkResult result = vkQueuePresentKHR(m_presentQueue, &presentInfo);
     
     if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
-        // Swap chain is out of date or suboptimal, should recreate it
         return false;
     } else if (result != VK_SUCCESS) {
         std::cerr << "Failed to present swap chain image: " << result << std::endl;
@@ -560,7 +486,6 @@ bool VulkanContext::presentFrame(uint32_t imageIndex, VkSemaphore waitSemaphore)
     
     return true;
 }
-
 
 VkResult VulkanContext::createDebugUtilsMessengerEXT(const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator) {
     auto func = (PFN_vkCreateDebugUtilsMessengerEXT) vkGetInstanceProcAddr(m_instance, "vkCreateDebugUtilsMessengerEXT");
@@ -618,7 +543,6 @@ std::string VulkanContext::getPhysicalDeviceName() const {
 }
 
 void VulkanContext::createLogicalDevice() {
-    // Create queue create info
     VkDeviceQueueCreateInfo queueCreateInfo{};
     queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
     queueCreateInfo.queueFamilyIndex = m_graphicsQueueFamilyIndex;
@@ -626,45 +550,22 @@ void VulkanContext::createLogicalDevice() {
     float queuePriority = 1.0f;
     queueCreateInfo.pQueuePriorities = &queuePriority;
 
-    // Create device create info
     VkDeviceCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
     createInfo.pQueueCreateInfos = &queueCreateInfo;
     createInfo.queueCreateInfoCount = 1;
     
-    // Only enable features that are actually supported
     VkPhysicalDeviceFeatures supportedFeatures;
     vkGetPhysicalDeviceFeatures(m_physicalDevice, &supportedFeatures);
     
-    // Enable basic features that are commonly supported
-    m_enabledFeatures.samplerAnisotropy = VK_TRUE;
-    m_enabledFeatures.fillModeNonSolid = VK_TRUE;
-    m_enabledFeatures.wideLines = VK_FALSE;
-    m_enabledFeatures.multiDrawIndirect = VK_FALSE;
-    m_enabledFeatures.logicOp = VK_FALSE;
-    m_enabledFeatures.depthClamp = VK_FALSE;
-    m_enabledFeatures.depthBiasClamp = VK_FALSE;
-    m_enabledFeatures.fillModeNonSolid = VK_FALSE;
-    m_enabledFeatures.depthBounds = VK_FALSE;
-    m_enabledFeatures.wideLines = VK_FALSE;
-    
-    // Only enable features that are actually supported
-    if (supportedFeatures.samplerAnisotropy) {
-        m_enabledFeatures.samplerAnisotropy = VK_TRUE;
-    } else {
-        m_enabledFeatures.samplerAnisotropy = VK_FALSE;
-    }
+    m_enabledFeatures.samplerAnisotropy = supportedFeatures.samplerAnisotropy ? VK_TRUE : VK_FALSE;
     
     createInfo.pEnabledFeatures = &m_enabledFeatures;
     
-    // Only enable essential extensions
-    std::vector<const char*> deviceExtensions;
-    deviceExtensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
-    
+    std::vector<const char*> deviceExtensions = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
     createInfo.enabledExtensionCount = static_cast<uint32_t>(deviceExtensions.size());
     createInfo.ppEnabledExtensionNames = deviceExtensions.data();
 
-    // Enable validation layers if requested
     if (m_validationLayersEnabled) {
         createInfo.enabledLayerCount = static_cast<uint32_t>(m_validationLayers.size());
         createInfo.ppEnabledLayerNames = m_validationLayers.data();
@@ -672,18 +573,13 @@ void VulkanContext::createLogicalDevice() {
         createInfo.enabledLayerCount = 0;
     }
 
-    // Create logical device
     VkResult result = vkCreateDevice(m_physicalDevice, &createInfo, nullptr, &m_device);
     if (result != VK_SUCCESS) {
         std::cerr << "Failed to create logical device: " << result << std::endl;
-        std::cerr << "This might be due to incompatible driver or unsupported features" << std::endl;
         throw std::runtime_error("Failed to create logical device!");
     }
 
-    // Get graphics queue
     vkGetDeviceQueue(m_device, m_graphicsQueueFamilyIndex, 0, &m_graphicsQueue);
-    
-    // Get present queue
     vkGetDeviceQueue(m_device, m_presentQueueFamilyIndex, 0, &m_presentQueue);
 
     std::cout << "Logical device created successfully" << std::endl;

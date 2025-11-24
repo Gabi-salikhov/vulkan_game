@@ -1,0 +1,10 @@
+{
+	"InstallScripts" : 
+	[
+		"/home/gabi/vulkan_game/build/cmake_install.cmake",
+		"/home/gabi/vulkan_game/build/engine/cmake_install.cmake",
+		"/home/gabi/vulkan_game/build/tools/cmake_install.cmake",
+		"/home/gabi/vulkan_game/build/examples/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

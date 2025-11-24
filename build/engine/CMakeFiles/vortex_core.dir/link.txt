@@ -1,0 +1,2 @@
+/usr/bin/ar qc libvortex_core.a CMakeFiles/vortex_core.dir/core/vulkan_context.cpp.o CMakeFiles/vortex_core.dir/core/window.cpp.o CMakeFiles/vortex_core.dir/core/memory_manager.cpp.o CMakeFiles/vortex_core.dir/renderer/buffer_allocator.cpp.o CMakeFiles/vortex_core.dir/renderer/shader_system.cpp.o CMakeFiles/vortex_core.dir/renderer/pipeline_system.cpp.o CMakeFiles/vortex_core.dir/renderer/command_buffer.cpp.o CMakeFiles/vortex_core.dir/renderer/synchronization.cpp.o
+/usr/bin/ranlib libvortex_core.a
